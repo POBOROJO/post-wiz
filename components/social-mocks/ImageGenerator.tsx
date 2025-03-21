@@ -11,15 +11,14 @@ import {
   Info,
   Camera,
 } from "lucide-react";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { useUser } from "@clerk/nextjs";
 import { updateUserPoints } from "@/utils/db/actions";
 
-const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
-
 // Cost in points for generating an image
 const IMAGE_GENERATION_COST = 10;
+
+// API endpoint for ClipDrop text-to-image generation
+const CLIPDROP_API_ENDPOINT = 'https://clipdrop-api.co/text-to-image/v1';
 
 interface ImageGeneratorProps {
   userPoints: number | null;
@@ -34,11 +33,12 @@ export function ImageGenerator({ userPoints, onPointsUpdate, onNotification }: I
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showTips, setShowTips] = useState(false);
+  const [remainingCredits, setRemainingCredits] = useState<number | null>(null);
 
   const hasEnoughPoints = userPoints !== null && userPoints >= IMAGE_GENERATION_COST;
 
   const generateImage = async () => {
-    if (!genAI || !prompt || !hasEnoughPoints || !user?.id) {
+    if (!prompt || !hasEnoughPoints || !user?.id) {
       if (!hasEnoughPoints) {
         onNotification('error', 'Not enough points for image generation');
       } else if (!prompt) {
@@ -51,60 +51,51 @@ export function ImageGenerator({ userPoints, onPointsUpdate, onNotification }: I
     setError(null);
     
     try {
-      // Using Gemini 2.0 Flash for image generation
-      const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash-exp-image-generation",
+      // Create form data for the API request
+      const form = new FormData();
+      form.append('prompt', prompt);
+
+      // Fetch image from ClipDrop API
+      const response = await fetch(CLIPDROP_API_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'x-api-key': process.env.NEXT_PUBLIC_CLIPDROP_API_KEY || ''
+        },
+        body: form
       });
-      
-      // Generation configuration
-      const generationConfig = {
-        temperature: 0.8,
-        topP: 0.95,
-        topK: 40,
-        maxOutputTokens: 8192,
-      };
 
-      // Generate the image
-      const result = await model.generateContent(prompt);
+      // Check if the request was successful
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate image');
+      }
 
-      // Extract image data
-      let imageDataUrl = null;
-      const responseData = result.response;
+      // Get remaining credits from headers
+      const remainingCreditsHeader = response.headers.get('x-remaining-credits');
+      if (remainingCreditsHeader) {
+        setRemainingCredits(parseInt(remainingCreditsHeader, 10));
+      }
 
-      if (responseData.candidates && responseData.candidates.length > 0) {
-        const candidate = responseData.candidates[0];
+      // Convert response to base64
+      const imageBlob = await response.blob();
+      const reader = new FileReader();
+      reader.readAsDataURL(imageBlob);
+      reader.onloadend = async () => {
+        const base64data = reader.result as string;
+        setGeneratedImage(base64data);
+
+        // Update user points
+        const updatedUser = await updateUserPoints(
+          user.id,
+          -IMAGE_GENERATION_COST
+        );
         
-        if (candidate.content && candidate.content.parts) {
-          // Loop through parts to find image data
-          for (const part of candidate.content.parts) {
-            if (part.inlineData) {
-              const imageData = part.inlineData.data;
-              const mimeType = part.inlineData.mimeType || 'image/png';
-              imageDataUrl = `data:${mimeType};base64,${imageData}`;
-              break;
-            }
-          }
+        if (updatedUser && updatedUser.points !== null) {
+          onPointsUpdate(updatedUser.points);
         }
-      }
-
-      if (!imageDataUrl) {
-        throw new Error("No image was generated. Please try a different prompt.");
-      }
-
-      // Set the generated image
-      setGeneratedImage(imageDataUrl);
-      
-      // Update user points
-      const updatedUser = await updateUserPoints(
-        user.id,
-        -IMAGE_GENERATION_COST
-      );
-      
-      if (updatedUser && updatedUser.points !== null) {
-        onPointsUpdate(updatedUser.points);
-      }
-      
-      onNotification('success', 'Image generated successfully!');
+        
+        onNotification('success', 'Image generated successfully!');
+      };
     } catch (err: any) {
       console.error("Error generating image:", err);
       setError(err.message || "Failed to generate image. Please try again.");
@@ -130,6 +121,7 @@ export function ImageGenerator({ userPoints, onPointsUpdate, onNotification }: I
 
   const clearImage = () => {
     setGeneratedImage(null);
+    setRemainingCredits(null);
   };
 
   // Example prompts for inspiration
@@ -230,6 +222,12 @@ export function ImageGenerator({ userPoints, onPointsUpdate, onNotification }: I
           {!hasEnoughPoints && (
             <p className="text-sm text-red-400 mt-2 text-center">
               You need {IMAGE_GENERATION_COST} points to generate an image.
+            </p>
+          )}
+
+          {remainingCredits !== null && (
+            <p className="text-xs text-gray-400 mt-2 text-center">
+              Remaining ClipDrop Credits: {remainingCredits}
             </p>
           )}
         </div>
