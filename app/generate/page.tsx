@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -22,7 +23,7 @@ import {
 } from "lucide-react";
 import { GoogleGenerativeAI, Part } from "@google/generative-ai";
 import ReactMarkdown from "react-markdown";
-import  Navbar  from "@/components/Navbar";
+import Navbar from "@/components/Navbar";
 import { SignInButton, useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import {
@@ -55,6 +56,66 @@ interface HistoryItem {
   prompt: string;
   content: string;
   createdAt: Date;
+}
+
+function LoadingState() {
+  return (
+    <div className="bg-gradient-to-br from-gray-900 to-black min-h-screen text-white p-8">
+      <div className="container mx-auto">
+        {/* Navbar skeleton */}
+        <div className="h-16 mb-8">
+          <Skeleton className="h-12 w-48" />
+        </div>
+
+        <div className="grid grid-cols-1 mt-14 lg:grid-cols-3 gap-8">
+          {/* Left sidebar skeleton */}
+          <div className="lg:col-span-1 bg-gray-800 rounded-2xl p-6 h-[calc(100vh-12rem)]">
+            <div className="flex items-center justify-between mb-6">
+              <Skeleton className="h-8 w-32" />
+              <Skeleton className="h-6 w-6 rounded-full" />
+            </div>
+            <div className="space-y-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="p-4 bg-gray-700 rounded-xl">
+                  <Skeleton className="h-6 w-24 mb-2" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-3 w-20 mt-2" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Main content area skeleton */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Points display skeleton */}
+            <div className="bg-gray-800 p-6 rounded-2xl flex items-center justify-between">
+              <div className="flex items-center">
+                <Skeleton className="h-8 w-8 rounded-full mr-3" />
+                <div>
+                  <Skeleton className="h-4 w-32 mb-2" />
+                  <Skeleton className="h-6 w-16" />
+                </div>
+              </div>
+              <Skeleton className="h-10 w-32 rounded-full" />
+            </div>
+
+            {/* Form skeleton */}
+            <div className="bg-gray-800 p-6 rounded-2xl space-y-6">
+              <div>
+                <Skeleton className="h-4 w-24 mb-2" />
+                <Skeleton className="h-10 w-full rounded-xl" />
+              </div>
+              <div>
+                <Skeleton className="h-4 w-16 mb-2" />
+                <Skeleton className="h-32 w-full rounded-xl" />
+              </div>
+              <Skeleton className="h-12 w-full rounded-xl" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function GenerateContent() {
@@ -225,7 +286,7 @@ export default function GenerateContent() {
 
   const renderContentMock = () => {
     if (generatedContent.length === 0) return null;
-  
+
     switch (contentType) {
       case "twitter":
         return <TwitterMock content={generatedContent} />;
@@ -238,7 +299,7 @@ export default function GenerateContent() {
     }
   };
   if (!isLoaded) {
-    return <div>Loading...</div>;
+    return <LoadingState />;
   }
 
   if (!isSignedIn) {
