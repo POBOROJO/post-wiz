@@ -1,6 +1,6 @@
-<p align="center">
-  <img src="public/thumbnail.jpg" alt="PostWiz Logo" />
-</p>
+<!-- <p align="center">
+  <img src="" alt="PostWiz Logo" />
+</p> -->
 
 # PostWiz: Social Media Content Generator
 
